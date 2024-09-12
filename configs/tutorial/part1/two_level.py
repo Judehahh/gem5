@@ -22,14 +22,20 @@ parser.add_argument(
     "--l1d_size", help="L1 data cache size. Default: Default: 64kB."
 )
 parser.add_argument("--l2_size", help="L2 cache size. Default: 256kB.")
+parser.add_argument("--cpu_model", help="CPU model. Default: TimingSimpleCPU.")
+parser.add_argument("--cpu_clock", help="CPU clock frequency. Default: 1GHz.")
 
 options = parser.parse_args()
 
 system = System()
 
 # clock and voltage
+if not options or not options.cpu_clock:
+    cpu_clock = "1GHz"
+else:
+    cpu_clock = options.cpu_clock
 system.clk_domain = SrcClockDomain()
-system.clk_domain.clock = "1GHz"
+system.clk_domain.clock = cpu_clock
 system.clk_domain.voltage_domain = VoltageDomain()
 
 # memory
@@ -37,7 +43,19 @@ system.mem_mode = "timing"
 system.mem_ranges = [AddrRange("512MB")]
 
 # CPU
-system.cpu = RiscvTimingSimpleCPU()
+if not options or not options.cpu_model:
+    system.cpu = RiscvTimingSimpleCPU()
+elif options.cpu_model == "TimingSimpleCPU":
+    system.cpu = RiscvTimingSimpleCPU()
+elif options.cpu_model == "MinorCPU":
+    system.cpu = RiscvMinorCPU()
+else:
+    print(
+        "CPU {} is not supported, use TimingSimpleCPU as default\n".format(
+            options.cpu_model
+        )
+    )
+    system.cpu = RiscvTimingSimpleCPU()
 
 # memory bus
 system.membus = SystemXBar()
@@ -61,15 +79,18 @@ system.system_port = system.membus.cpu_side_ports
 
 # memory controller
 system.mem_ctrl = MemCtrl()
-system.mem_ctrl.dram = DDR3_1600_8x8()
+system.mem_ctrl.dram = LPDDR2_S4_1066_1x32()
 system.mem_ctrl.dram.range = system.mem_ranges[0]
 system.mem_ctrl.port = system.membus.mem_side_ports
 
 # specify the program file
-binary = "tests/test-progs/hello/bin/riscv/linux/hello"
+if not options or not options.binary:
+    binary = "tests/test-progs/hello/bin/riscv/linux/hello"
+else:
+    binary = options.binary
 
 # syscall emulation mode
-system.workload = SEWorkload.init_compatible(options.binary)
+system.workload = SEWorkload.init_compatible(binary)
 
 process = Process()
 process.cmd = [binary]
